@@ -10,7 +10,6 @@ gdown
 python-dotenv
 groq
 faiss-cpu
-sentence-transformers
 pdfplumber
 langchain-text-splitters
 reportlab
