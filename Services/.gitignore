@@ -1,0 +1,4 @@
+*.h5
+ml_models/
+.env
+__pycache__/
