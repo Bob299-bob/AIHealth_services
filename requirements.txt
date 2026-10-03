@@ -15,3 +15,4 @@ pdfplumber
 langchain-text-splitters
 reportlab
 ddgs
+SQLAlchemy
