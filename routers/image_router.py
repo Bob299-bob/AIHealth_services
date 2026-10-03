@@ -11,7 +11,7 @@ from fastapi import (
     HTTPException
 )
 
-from Services.model_loader import load_models
+from Services.model_loader import get_xray_model
 
 
 router = APIRouter(
@@ -21,24 +21,8 @@ router = APIRouter(
 
 
 # =========================
-# LOAD MODELS
-# =========================
-
-mri_model, xray_model = load_models()
-
-
-# =========================
 # CLASS NAMES
 # =========================
-
-MRI_CLASSES = [
-    "glioma",
-    "meningioma",
-    "notumor",
-    "pituitary",
-    "unknown"
-]
-
 
 XRAY_CLASSES = [
     "covid19",
@@ -75,7 +59,7 @@ def preprocess_image(image):
 
 
 # =========================
-# ANALYZE IMAGE
+# ANALYZE X-RAY IMAGE
 # =========================
 
 @router.post("/analyze")
@@ -86,52 +70,53 @@ async def analyze_image(
 
     try:
 
+        # -------------------------
         # Validate image type
+        # -------------------------
 
-        if image_type not in [
-            "mri",
-            "xray"
-        ]:
+        if image_type != "xray":
 
             raise HTTPException(
                 status_code=400,
-                detail="image_type must be 'mri' or 'xray'"
+                detail="Only 'xray' image analysis is supported"
             )
 
 
+        # -------------------------
         # Read image
+        # -------------------------
 
         contents = await image.read()
 
 
+        # -------------------------
         # Open image
+        # -------------------------
 
         pil_image = Image.open(
             BytesIO(contents)
         )
 
 
-        # Preprocess
+        # -------------------------
+        # Preprocess image
+        # -------------------------
 
         processed_image = preprocess_image(
             pil_image
         )
 
 
-        # Select model
+        # -------------------------
+        # Load X-Ray model
+        # -------------------------
 
-        if image_type == "mri":
-
-            model = mri_model
-            classes = MRI_CLASSES
-
-        else:
-
-            model = xray_model
-            classes = XRAY_CLASSES
+        model = get_xray_model()
 
 
+        # -------------------------
         # Prediction
+        # -------------------------
 
         predictions = model.predict(
             processed_image,
@@ -139,7 +124,9 @@ async def analyze_image(
         )
 
 
+        # -------------------------
         # Predicted index
+        # -------------------------
 
         predicted_index = int(
             np.argmax(
@@ -148,7 +135,9 @@ async def analyze_image(
         )
 
 
+        # -------------------------
         # Confidence
+        # -------------------------
 
         confidence = float(
             np.max(
@@ -157,13 +146,17 @@ async def analyze_image(
         )
 
 
+        # -------------------------
+        # Response
+        # -------------------------
+
         return {
 
-            "image_type": image_type,
+            "image_type": "xray",
 
             "prediction": predicted_index,
 
-            "class_name": classes[
+            "class_name": XRAY_CLASSES[
                 predicted_index
             ],
 
