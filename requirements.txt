@@ -16,3 +16,5 @@ langchain-text-splitters
 reportlab
 ddgs
 SQLAlchemy
+passlib[bcrypt]
+python-jose
