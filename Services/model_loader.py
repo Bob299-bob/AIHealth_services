@@ -1,10 +1,9 @@
 import os
+
 import gdown
 import tensorflow as tf
 
 from dotenv import load_dotenv
-
-load_dotenv()
 
 
 # =========================
@@ -12,7 +11,21 @@ load_dotenv()
 # =========================
 
 BASE_DIR = os.path.dirname(
-    os.path.dirname(__file__)
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+
+
+# =========================
+# LOAD ENV
+# =========================
+
+load_dotenv(
+    os.path.join(
+        BASE_DIR,
+        ".env"
+    )
 )
 
 
@@ -32,31 +45,24 @@ os.makedirs(
 
 
 # =========================
-# MODEL PATHS
+# X-RAY MODEL
 # =========================
-
-MRI_MODEL_PATH = os.path.join(
-    MODEL_DIR,
-    "MRImodel.h5"
-)
 
 XRAY_MODEL_PATH = os.path.join(
     MODEL_DIR,
     "Xraymodel.h5"
 )
 
-
-# =========================
-# GOOGLE DRIVE IDs
-# =========================
-
-MRI_MODEL_ID = os.getenv(
-    "MRI_MODEL_ID"
-)
-
 XRAY_MODEL_ID = os.getenv(
     "XRAY_MODEL_ID"
 )
+
+
+# =========================
+# MODEL VARIABLE
+# =========================
+
+_xray_model = None
 
 
 # =========================
@@ -80,12 +86,12 @@ def download_model(
     if not file_id:
 
         raise RuntimeError(
-            f"Google Drive ID missing for {output_path}"
+            "XRAY_MODEL_ID is missing from .env"
         )
 
 
     print(
-        f"Downloading model: {output_path}"
+        f"Downloading X-Ray model..."
     )
 
 
@@ -99,50 +105,40 @@ def download_model(
     if not os.path.exists(output_path):
 
         raise RuntimeError(
-            f"Failed to download model: {output_path}"
+            "Failed to download X-Ray model"
         )
 
 
 # =========================
-# LOAD BOTH MODELS
+# GET X-RAY MODEL
 # =========================
 
-def load_models():
+def get_xray_model():
 
-    print("Checking MRI model...")
-
-    download_model(
-        MRI_MODEL_ID,
-        MRI_MODEL_PATH
-    )
+    global _xray_model
 
 
-    print("Checking X-Ray model...")
+    if _xray_model is None:
 
-    download_model(
-        XRAY_MODEL_ID,
-        XRAY_MODEL_PATH
-    )
-
-
-    print("Loading MRI model...")
-
-    mri_model = tf.keras.models.load_model(
-        MRI_MODEL_PATH
-    )
+        download_model(
+            XRAY_MODEL_ID,
+            XRAY_MODEL_PATH
+        )
 
 
-    print("Loading X-Ray model...")
-
-    xray_model = tf.keras.models.load_model(
-        XRAY_MODEL_PATH
-    )
+        print(
+            "Loading X-Ray model..."
+        )
 
 
-    print("Both models loaded successfully!")
+        _xray_model = tf.keras.models.load_model(
+            XRAY_MODEL_PATH
+        )
 
 
-    return (
-        mri_model,
-        xray_model
-    )
+        print(
+            "X-Ray model loaded successfully!"
+        )
+
+
+    return _xray_model
