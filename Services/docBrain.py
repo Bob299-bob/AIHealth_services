@@ -1,13 +1,19 @@
 import os
 import faiss
 import pdfplumber
+import numpy as np
 
 from dotenv import load_dotenv
 from groq import Groq
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+
+# =========================
+# ENVIRONMENT
+# =========================
 
 load_dotenv()
 
@@ -15,15 +21,20 @@ client = Groq(
     api_key=os.getenv("GROQ_API_KEY")
 )
 
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
-)
+
+# =========================
+# TEXT SPLITTER
+# =========================
 
 splitter = RecursiveCharacterTextSplitter(
     chunk_size=500,
     chunk_overlap=100
 )
 
+
+# =========================
+# PDF TEXT EXTRACTION
+# =========================
 
 def pdf_extract(data_path):
 
@@ -41,69 +52,162 @@ def pdf_extract(data_path):
     return pdf_text
 
 
+# =========================
+# CREATE RAG
+# =========================
+
 def create_rag(pdf_text):
 
     if not pdf_text.strip():
+
         raise ValueError(
             "No readable text found in PDF."
         )
 
-    chunks = splitter.split_text(pdf_text)
 
-    embeddings = embedding_model.encode(
+    # Split PDF into chunks
+    chunks = splitter.split_text(
+        pdf_text
+    )
+
+
+    if not chunks:
+
+        raise ValueError(
+            "No text chunks created from PDF."
+        )
+
+
+    # =========================
+    # TF-IDF EMBEDDINGS
+    # =========================
+
+    vectorizer = TfidfVectorizer(
+        stop_words="english"
+    )
+
+
+    embeddings = vectorizer.fit_transform(
         chunks
-    ).astype("float32")
+    )
 
-    faiss.normalize_L2(embeddings)
+
+    # Convert sparse matrix to float32
+    embeddings = embeddings.toarray().astype(
+        "float32"
+    )
+
+
+    # Normalize vectors
+    faiss.normalize_L2(
+        embeddings
+    )
+
+
+    # =========================
+    # FAISS INDEX
+    # =========================
 
     index = faiss.IndexFlatIP(
         embeddings.shape[1]
     )
 
-    index.add(embeddings)
 
-    return index, chunks
+    index.add(
+        embeddings
+    )
 
 
-def retrieve(query, index, chunks, k=5):
+    return (
+        index,
+        chunks,
+        vectorizer
+    )
+
+
+# =========================
+# RETRIEVE RELEVANT CHUNKS
+# =========================
+
+def retrieve(
+    query,
+    index,
+    chunks,
+    vectorizer,
+    k=5
+):
 
     if not chunks:
+
         return []
 
-    query_embedding = embedding_model.encode(
+
+    # Convert question into TF-IDF vector
+    query_embedding = vectorizer.transform(
         [query]
-    ).astype("float32")
+    )
 
-    faiss.normalize_L2(query_embedding)
 
+    # Convert to float32
+    query_embedding = query_embedding.toarray().astype(
+        "float32"
+    )
+
+
+    # Normalize
+    faiss.normalize_L2(
+        query_embedding
+    )
+
+
+    # Search FAISS
     distances, indices = index.search(
         query_embedding,
         k=min(k, len(chunks))
     )
 
+
     retrieved_chunks = []
+
 
     for idx in indices[0]:
 
         if idx != -1:
+
             retrieved_chunks.append(
                 chunks[idx]
             )
 
+
     return retrieved_chunks
 
 
-def generate_answer(query, retrieved_chunks):
+# =========================
+# GENERATE ANSWER
+# =========================
+
+def generate_answer(
+    query,
+    retrieved_chunks
+):
 
     if not retrieved_chunks:
+
         return (
             "I could not find relevant information "
             "in the uploaded document."
         )
 
+
+    # Combine retrieved chunks
     context = "\n\n".join(
         retrieved_chunks
     )
+
+
+    # =========================
+    # PROMPT
+    # =========================
 
     prompt = f"""
 You are a document-based AI assistant.
@@ -131,11 +235,17 @@ User Question:
 Answer:
 """
 
+
+    # =========================
+    # GROQ
+    # =========================
+
     response = client.chat.completions.create(
 
         model="openai/gpt-oss-20b",
 
         messages=[
+
             {
                 "role": "system",
                 "content": (
@@ -143,35 +253,56 @@ Answer:
                     "provided document context."
                 )
             },
+
             {
                 "role": "user",
                 "content": prompt
             }
+
         ],
 
         temperature=0.2,
+
         max_tokens=500
     )
+
 
     return response.choices[0].message.content
 
 
-def ask_rag(query, index, chunks):
+# =========================
+# ASK RAG
+# =========================
 
+def ask_rag(
+    query,
+    index,
+    chunks,
+    vectorizer
+):
+
+    # Retrieve relevant chunks
     retrieved_chunks = retrieve(
         query,
         index,
         chunks,
+        vectorizer,
         k=5
     )
 
+
+    # Generate answer
     answer = generate_answer(
         query,
         retrieved_chunks
     )
 
+
     return {
+
         "question": query,
+
         "answer": answer,
+
         "sources": retrieved_chunks
     }
