@@ -1,5 +1,4 @@
 import os
-
 import gdown
 import tensorflow as tf
 
@@ -7,25 +6,15 @@ from dotenv import load_dotenv
 
 
 # =========================
-# BASE DIRECTORY
-# =========================
-
-BASE_DIR = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
-)
-
-
-# =========================
 # LOAD ENV
 # =========================
 
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
+
 load_dotenv(
-    os.path.join(
-        BASE_DIR,
-        ".env"
-    )
+    os.path.join(BASE_DIR, ".env")
 )
 
 
@@ -59,7 +48,7 @@ XRAY_MODEL_ID = os.getenv(
 
 
 # =========================
-# MODEL VARIABLE
+# MODEL CACHE
 # =========================
 
 _xray_model = None
@@ -74,6 +63,7 @@ def download_model(
     output_path
 ):
 
+    # Model already downloaded
     if os.path.exists(output_path):
 
         print(
@@ -83,15 +73,16 @@ def download_model(
         return
 
 
+    # Check Google Drive ID
     if not file_id:
 
         raise RuntimeError(
-            "XRAY_MODEL_ID is missing from .env"
+            "XRAY_MODEL_ID is missing from environment variables"
         )
 
 
     print(
-        f"Downloading X-Ray model..."
+        "Downloading X-Ray model..."
     )
 
 
@@ -118,27 +109,37 @@ def get_xray_model():
     global _xray_model
 
 
-    if _xray_model is None:
+    # Already loaded
+    if _xray_model is not None:
 
-        download_model(
-            XRAY_MODEL_ID,
-            XRAY_MODEL_PATH
-        )
+        return _xray_model
 
 
-        print(
-            "Loading X-Ray model..."
-        )
+    print(
+        "Preparing X-Ray model..."
+    )
 
 
-        _xray_model = tf.keras.models.load_model(
-            XRAY_MODEL_PATH
-        )
+    # Download only when required
+    download_model(
+        XRAY_MODEL_ID,
+        XRAY_MODEL_PATH
+    )
 
 
-        print(
-            "X-Ray model loaded successfully!"
-        )
+    print(
+        "Loading X-Ray model..."
+    )
+
+
+    _xray_model = tf.keras.models.load_model(
+        XRAY_MODEL_PATH
+    )
+
+
+    print(
+        "X-Ray model loaded successfully!"
+    )
 
 
     return _xray_model
